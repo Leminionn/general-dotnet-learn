@@ -1,3 +1,7 @@
+using FirstAPIProject.Application.Modules.Announcement.Interfaces;
+using FirstAPIProject.Application.Modules.Announcement.Services;
+using FirstAPIProject.Application.Modules.Audit.Interfaces;
+using FirstAPIProject.Application.Modules.Audit.Services;
 using FirstAPIProject.Application.Modules.Auth.Interfaces;
 using FirstAPIProject.Application.Modules.Auth.Services;
 using FirstAPIProject.Application.Modules.User.Interfaces;
@@ -25,6 +29,12 @@ namespace FirstAPIProject.Application
 
             // Whitelist Services
             services.AddScoped<IEmailWhitelistService, EmailWhitelistService>();
+
+            // Announcement Services
+            services.AddScoped<IAnnouncementService, AnnouncementService>();
+
+            // Audit Log Services
+            services.AddScoped<IAuditLogService, AuditLogService>();
 
             return services;
         }

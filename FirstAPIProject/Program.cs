@@ -13,6 +13,7 @@ using Microsoft.OpenApi;
 using System.Text;
 using System.Threading.RateLimiting;
 using Asp.Versioning;
+using FirstAPIProject.Application.Modules.Auth.Interfaces;
 
 namespace FirstAPIProject
 {
@@ -35,6 +36,9 @@ namespace FirstAPIProject
 
             // This initializes the application configuration, logging, dependency injection (DI) container, and web server settings.
             var builder = WebApplication.CreateBuilder(args);
+
+            // Configure log4net
+            builder.Logging.AddLog4Net("log4net.config");
 
             Console.WriteLine($"Builder environment: {builder.Environment.EnvironmentName}");
 
@@ -261,6 +265,23 @@ namespace FirstAPIProject
                 var created = await dbContext.Database.EnsureCreatedAsync();
 
                 app.Logger.LogInformation("EnsureCreatedAsync completed. Database created: {Created}", created);
+
+                // Seed default admin account if none exists
+                if (!await dbContext.Users.AnyAsync(u => u.Role == FirstAPIProject.Domain.Common.Enums.UserRole.Admin))
+                {
+                    var passwordService = scope.ServiceProvider.GetRequiredService<IPasswordService>();
+                    var admin = FirstAPIProject.Domain.Entities.User.Create(
+                        "admin@uit.edu.vn",
+                        passwordService.HashPassword("Admin@123456"),
+                        "System Admin",
+                        "0901234567",
+                        FirstAPIProject.Domain.Common.Enums.UserRole.Admin);
+
+                    await dbContext.Users.AddAsync(admin);
+                    await dbContext.SaveChangesAsync();
+
+                    app.Logger.LogInformation("Default Admin user seeded: admin@uit.edu.vn / Admin@123456");
+                }
             }
 
             // Global exception handler.
@@ -297,6 +318,9 @@ namespace FirstAPIProject
 
             // Enable authorization middleware.
             app.UseAuthorization();
+
+            // Audit logging middleware.
+            app.UseMiddleware<AuditLoggingMiddleware>();
 
             // Map Controller routes to the HTTP request pipeline.
             app.MapControllers();

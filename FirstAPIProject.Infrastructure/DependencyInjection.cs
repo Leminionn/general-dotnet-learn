@@ -1,4 +1,6 @@
 using FirstAPIProject.Application.Common.Interfaces;
+using FirstAPIProject.Application.Modules.Announcement.Interfaces;
+using FirstAPIProject.Application.Modules.Audit.Interfaces;
 using FirstAPIProject.Application.Modules.Auth.Interfaces;
 using FirstAPIProject.Application.Modules.User.Interfaces;
 using FirstAPIProject.Application.Modules.Whitelist.Interfaces;
@@ -20,6 +22,9 @@ namespace FirstAPIProject.Infrastructure
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
             services.AddScoped<IEmailWhitelistRepository, EmailWhitelistRepository>();
+            services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+            services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
+            services.AddScoped<IAuditLogRepository, AuditLogRepository>();
 
             // Authentication & Security services
             services.AddScoped<IJwtService, JwtService>();

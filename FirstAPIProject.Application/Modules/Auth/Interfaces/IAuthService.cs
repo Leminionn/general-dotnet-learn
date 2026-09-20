@@ -1,8 +1,7 @@
-﻿using FirstAPIProject.Application.Modules.Auth.DTOs;
-using FirstAPIProject.Domain.Entities;
+using FirstAPIProject.Application.Modules.Auth.DTOs;
 using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FirstAPIProject.Application.Modules.Auth.Interfaces
 {
@@ -15,5 +14,11 @@ namespace FirstAPIProject.Application.Modules.Auth.Interfaces
         Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default);
 
         Task LogoutAsync(Guid userId, RefreshTokenRequest request, CancellationToken cancellationToken = default);
+
+        Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken cancellationToken = default);
+
+        Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default);
+
+        Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default);
     }
 }

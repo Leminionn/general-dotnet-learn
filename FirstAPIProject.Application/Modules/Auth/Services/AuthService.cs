@@ -7,7 +7,8 @@ using FirstAPIProject.Application.Modules.Whitelist.Interfaces;
 using FirstAPIProject.Domain.Entities;
 using FluentValidation;
 using System;
-using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,10 +22,14 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
         private readonly IJwtService _jwtService;
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IPasswordResetTokenRepository _passwordResetTokenRepository;
         private readonly IEmailWhitelistService _whitelistService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IValidator<RegisterRequest> _registerValidator;
         private readonly IValidator<LoginRequest> _loginValidator;
+        private readonly IValidator<ChangePasswordRequest> _changePasswordValidator;
+        private readonly IValidator<ForgotPasswordRequest> _forgotPasswordValidator;
+        private readonly IValidator<ResetPasswordRequest> _resetPasswordValidator;
 
         public AuthService(
             IUserRepository userRepository,
@@ -32,20 +37,28 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
             IJwtService jwtService,
             IRefreshTokenRepository refreshTokenRepository,
             IRefreshTokenService refreshTokenService,
+            IPasswordResetTokenRepository passwordResetTokenRepository,
             IEmailWhitelistService whitelistService,
             IUnitOfWork unitOfWork,
             IValidator<RegisterRequest> registerValidator,
-            IValidator<LoginRequest> loginValidator)
+            IValidator<LoginRequest> loginValidator,
+            IValidator<ChangePasswordRequest> changePasswordValidator,
+            IValidator<ForgotPasswordRequest> forgotPasswordValidator,
+            IValidator<ResetPasswordRequest> resetPasswordValidator)
         {
             _userRepository = userRepository;
             _passwordService = passwordService;
             _jwtService = jwtService;
             _refreshTokenRepository = refreshTokenRepository;
             _refreshTokenService = refreshTokenService;
+            _passwordResetTokenRepository = passwordResetTokenRepository;
             _whitelistService = whitelistService;
             _unitOfWork = unitOfWork;
             _registerValidator = registerValidator;
             _loginValidator = loginValidator;
+            _changePasswordValidator = changePasswordValidator;
+            _forgotPasswordValidator = forgotPasswordValidator;
+            _resetPasswordValidator = resetPasswordValidator;
         }
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
@@ -100,52 +113,38 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
 
         public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken = default)
         {
-            // Hash the raw refresh token sent by the client.
             var tokenHash = _refreshTokenService.HashToken(request.RefreshToken);
 
-            // Find the refresh token in the database.
             var storedToken = await _refreshTokenRepository.GetByTokenHashAsync(tokenHash, cancellationToken);
 
-            // Reject if the token does not exist or is no longer active.
             if (storedToken is null || !storedToken.IsActive())
             {
                 throw new InvalidRefreshTokenException();
             }
 
-            // Find the user associated with the refresh token.
-            var user =  await _userRepository.GetByIdAsync(storedToken.UserId, cancellationToken);
+            var user = await _userRepository.GetByIdAsync(storedToken.UserId, cancellationToken);
 
-            // Reject if the user no longer exists.
-            if (user is null)
+            if (user is null || !user.IsActive || user.IsDeleted)
             {
                 throw new InvalidRefreshTokenException();
             }
 
-            // Generate a new refresh token.
             var newRawRefreshToken = _refreshTokenService.GenerateToken();
+            var newRefreshTokenHash = _refreshTokenService.HashToken(newRawRefreshToken);
 
-            // Store only the hash of the new refresh token.
-            var newRefreshTokenHash =  _refreshTokenService.HashToken(newRawRefreshToken);
-
-            // Create the new refresh token.
             var newRefreshToken = RefreshToken.Create(
                 user.Id,
                 newRefreshTokenHash,
                 _refreshTokenService.GetExpiration());
 
-            // Revoke the old refresh token and link it to the newly generated refresh token.
             storedToken.Revoke(newRefreshTokenHash);
 
-            // Add the new refresh token to the database.
             await _refreshTokenRepository.AddAsync(newRefreshToken, cancellationToken);
 
-            // Generate a new access token.
-            var accessToken =  _jwtService.GenerateToken(user);
+            var accessToken = _jwtService.GenerateToken(user);
 
-            // Persist both the revoked old token and the newly created refresh token.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            // Return the new access token and refresh token.
             return new AuthResponse(
                 accessToken.AccessToken,
                 accessToken.ExpiresAt,
@@ -174,6 +173,91 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
             }
 
             storedToken.Revoke();
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            await _changePasswordValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+            var user = await _userRepository.GetByIdWithTokensAsync(userId, cancellationToken);
+            if (user is null || !user.IsActive || user.IsDeleted)
+            {
+                throw new UserNotFoundException(userId);
+            }
+
+            var valid = _passwordService.VerifyPassword(user.PasswordHash, request.CurrentPassword);
+            if (!valid)
+            {
+                throw new InvalidCredentialsException();
+            }
+
+            var newPasswordHash = _passwordService.HashPassword(request.NewPassword);
+            user.ChangePassword(newPasswordHash);
+
+            // Revoke all refresh tokens for security on password change
+            foreach (var token in user.RefreshTokens.Where(t => t.IsActive()))
+            {
+                token.Revoke("Password changed");
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            await _forgotPasswordValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+            var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
+            if (user is null || !user.IsActive || user.IsDeleted)
+            {
+                // To prevent email enumeration, return a generic success message
+                return new ForgotPasswordResponse("If your email is registered, you will receive password reset instructions.", null);
+            }
+
+            await _passwordResetTokenRepository.InvalidateAllForUserAsync(user.Id, cancellationToken);
+
+            // Generate secure random reset token
+            var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
+
+            var resetToken = PasswordResetToken.Create(user.Id, tokenHash, TimeSpan.FromMinutes(15));
+
+            await _passwordResetTokenRepository.AddAsync(resetToken, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // In dev environment, return rawToken so it can be tested directly in Swagger
+            return new ForgotPasswordResponse("Password reset token generated successfully. It will expire in 15 minutes.", rawToken);
+        }
+
+        public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            await _resetPasswordValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+            var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token)));
+
+            var resetToken = await _passwordResetTokenRepository.GetActiveByTokenHashAsync(tokenHash, cancellationToken);
+            if (resetToken is null || !resetToken.User.Email.Equals(request.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Invalid or expired password reset token.");
+            }
+
+            var user = await _userRepository.GetByIdWithTokensAsync(resetToken.UserId, cancellationToken);
+            if (user is null || !user.IsActive || user.IsDeleted)
+            {
+                throw new ArgumentException("User account is inactive.");
+            }
+
+            var newPasswordHash = _passwordService.HashPassword(request.NewPassword);
+            user.ChangePassword(newPasswordHash);
+            resetToken.MarkAsUsed();
+
+            // Revoke all refresh tokens
+            foreach (var token in user.RefreshTokens.Where(t => t.IsActive()))
+            {
+                token.Revoke("Password reset via recovery token");
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }

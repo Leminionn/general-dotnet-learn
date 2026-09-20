@@ -15,6 +15,9 @@ namespace FirstAPIProject.Infrastructure.Persistence
         public DbSet<User> Users => Set<User>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<EmailWhitelist> EmailWhitelists => Set<EmailWhitelist>();
+        public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+        public DbSet<Announcement> Announcements => Set<Announcement>();
+        public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
         protected override void OnModelCreating(
         ModelBuilder modelBuilder)
