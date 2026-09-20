@@ -30,7 +30,14 @@ namespace FirstAPIProject
                 _ => ".env.development"
             };
 
-            Env.Load(envFile);
+            if (File.Exists(envFile))
+            {
+                Env.Load(envFile);
+            }
+            else if (File.Exists(Path.Combine("..", envFile)))
+            {
+                Env.Load(Path.Combine("..", envFile));
+            }
 
             Console.WriteLine($"Before builder: {Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")}");
 
