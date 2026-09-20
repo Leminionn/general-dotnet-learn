@@ -45,17 +45,17 @@ namespace FirstAPIProject.API.Controllers
 
         [HttpPatch("me/avatar")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UpdateAvatar([FromForm] IFormFile file, CancellationToken cancellationToken)
+        public async Task<IActionResult> UpdateAvatar([FromForm] AvatarUploadRequest request, CancellationToken cancellationToken)
         {
-            if (file == null || file.Length == 0)
+            if (request?.File == null || request.File.Length == 0)
             {
                 return BadRequest(new { message = "No file was uploaded." });
             }
 
             var userId = GetCurrentUserId();
 
-            using var stream = file.OpenReadStream();
-            var avatarUrl = await _fileStorageService.SaveAvatarAsync(stream, file.FileName, file.ContentType, cancellationToken);
+            using var stream = request.File.OpenReadStream();
+            var avatarUrl = await _fileStorageService.SaveAvatarAsync(stream, request.File.FileName, request.File.ContentType, cancellationToken);
 
             var updatedProfile = await _userService.UpdateAvatarAsync(userId, avatarUrl, cancellationToken);
             return Ok(updatedProfile);
@@ -68,5 +68,10 @@ namespace FirstAPIProject.API.Controllers
 
             return Guid.Parse(claimValue);
         }
+    }
+
+    public class AvatarUploadRequest
+    {
+        public IFormFile File { get; set; } = null!;
     }
 }
