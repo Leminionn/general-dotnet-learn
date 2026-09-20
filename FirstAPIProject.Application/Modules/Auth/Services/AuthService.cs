@@ -1,13 +1,16 @@
-﻿using FirstAPIProject.Application.Common.Exceptions;
+using FirstAPIProject.Application.Common.Exceptions;
 using FirstAPIProject.Application.Common.Interfaces;
 using FirstAPIProject.Application.Modules.Auth.DTOs;
 using FirstAPIProject.Application.Modules.Auth.Interfaces;
 using FirstAPIProject.Application.Modules.User.Interfaces;
+using FirstAPIProject.Application.Modules.Whitelist.Interfaces;
 using FirstAPIProject.Domain.Entities;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices.Marshalling;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FirstAPIProject.Application.Modules.Auth.Services
 {
@@ -18,7 +21,10 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
         private readonly IJwtService _jwtService;
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly IEmailWhitelistService _whitelistService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IValidator<RegisterRequest> _registerValidator;
+        private readonly IValidator<LoginRequest> _loginValidator;
 
         public AuthService(
             IUserRepository userRepository,
@@ -26,18 +32,32 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
             IJwtService jwtService,
             IRefreshTokenRepository refreshTokenRepository,
             IRefreshTokenService refreshTokenService,
-            IUnitOfWork unitOfWork)
+            IEmailWhitelistService whitelistService,
+            IUnitOfWork unitOfWork,
+            IValidator<RegisterRequest> registerValidator,
+            IValidator<LoginRequest> loginValidator)
         {
             _userRepository = userRepository;
             _passwordService = passwordService;
             _jwtService = jwtService;
             _refreshTokenRepository = refreshTokenRepository;
             _refreshTokenService = refreshTokenService;
+            _whitelistService = whitelistService;
             _unitOfWork = unitOfWork;
+            _registerValidator = registerValidator;
+            _loginValidator = loginValidator;
         }
 
         public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken = default)
         {
+            await _registerValidator.ValidateAndThrowAsync(request, cancellationToken);
+
+            var isWhitelisted = await _whitelistService.IsEmailAllowedAsync(request.Email, cancellationToken);
+            if (!isWhitelisted)
+            {
+                throw new EmailNotWhitelistedException(request.Email);
+            }
+
             var exists = await _userRepository.AnyAsync(x => x.Email == request.Email, cancellationToken);
 
             if (exists)
@@ -56,9 +76,11 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
 
         public async Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
         {
+            await _loginValidator.ValidateAndThrowAsync(request, cancellationToken);
+
             var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
 
-            if (user is null)
+            if (user is null || !user.IsActive || user.IsDeleted)
             {
                 throw new InvalidCredentialsException();
             }
@@ -69,6 +91,9 @@ namespace FirstAPIProject.Application.Modules.Auth.Services
             {
                 throw new InvalidCredentialsException();
             }
+
+            user.RecordLogin();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return await CreateAuthResponseAsync(user, cancellationToken);
         }

@@ -1,4 +1,4 @@
-﻿using FirstAPIProject.Domain.Entities;
+using FirstAPIProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -14,6 +14,7 @@ namespace FirstAPIProject.Infrastructure.Persistence
 
         public DbSet<User> Users => Set<User>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+        public DbSet<EmailWhitelist> EmailWhitelists => Set<EmailWhitelist>();
 
         protected override void OnModelCreating(
         ModelBuilder modelBuilder)

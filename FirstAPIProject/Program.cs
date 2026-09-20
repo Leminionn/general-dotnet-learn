@@ -286,6 +286,9 @@ namespace FirstAPIProject
             // Redirect HTTP requests to HTTPS.
             app.UseHttpsRedirection();
 
+            // Serve uploaded static files (e.g. avatars)
+            app.UseStaticFiles();
+
             // Apply CORS
             app.UseCors("FrontendPolicy");
 

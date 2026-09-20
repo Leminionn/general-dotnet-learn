@@ -1,4 +1,4 @@
-﻿using FirstAPIProject.Domain.Common.Enums;
+using FirstAPIProject.Domain.Common.Enums;
 
 namespace FirstAPIProject.Domain.Entities
 {
@@ -8,7 +8,11 @@ namespace FirstAPIProject.Domain.Entities
 
         public string Email { get; private set; } = null!;
 
-        public string? PhoneNumber {  get; private set; }
+        public string? PhoneNumber { get; private set; }
+
+        public string? AvatarUrl { get; private set; }
+
+        public DateTime? LastLoginAt { get; private set; }
 
         public string PasswordHash { get; private set; } = null!;
 
@@ -29,9 +33,9 @@ namespace FirstAPIProject.Domain.Entities
             Role = role;
         }
 
-        public static User Create(string email, string passwordHash, string? userName = null, string? phoneNumber = null)
+        public static User Create(string email, string passwordHash, string? userName = null, string? phoneNumber = null, UserRole role = UserRole.User)
         {
-            return new User(userName, email, phoneNumber, passwordHash, UserRole.User);
+            return new User(userName, email, phoneNumber, passwordHash, role);
         }
 
         public void ChangePassword(string passwordHash)
@@ -52,6 +56,27 @@ namespace FirstAPIProject.Domain.Entities
         public void ChangePhoneNumber(string phoneNumber)
         {
             PhoneNumber = phoneNumber;
+        }
+
+        public void UpdateProfile(string? userName, string? phoneNumber)
+        {
+            UserName = userName;
+            PhoneNumber = phoneNumber;
+        }
+
+        public void UpdateAvatar(string? avatarUrl)
+        {
+            AvatarUrl = avatarUrl;
+        }
+
+        public void UpdateRole(UserRole role)
+        {
+            Role = role;
+        }
+
+        public void RecordLogin(DateTime? loginTime = null)
+        {
+            LastLoginAt = loginTime ?? DateTime.UtcNow;
         }
     }
 }

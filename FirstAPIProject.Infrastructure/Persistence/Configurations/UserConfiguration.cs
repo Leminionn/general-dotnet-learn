@@ -1,4 +1,4 @@
-﻿using FirstAPIProject.Domain.Entities;
+using FirstAPIProject.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System;
@@ -27,6 +27,13 @@ namespace FirstAPIProject.Infrastructure.Persistence.Configurations
             builder.Property(x => x.PhoneNumber)
                 .IsRequired(false)
                 .HasMaxLength(20);
+
+            builder.Property(x => x.AvatarUrl)
+                .IsRequired(false)
+                .HasMaxLength(1000);
+
+            builder.Property(x => x.LastLoginAt)
+                .IsRequired(false);
 
             builder.Property(x => x.PasswordHash)
                 .IsRequired()
