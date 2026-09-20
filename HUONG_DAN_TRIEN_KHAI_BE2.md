@@ -8,13 +8,14 @@
 ## MỤC LỤC
 1. [Bản đồ phạm vi công việc của BE-2](#1-bản-đồ-phạm-vi-công-việc-của-be-2)
 2. [Cấu trúc 4 tầng trong Project](#2-cấu-trúc-4-tầng-trong-project)
-3. [Quy trình 6 bước triển khai chuẩn Clean Architecture](#3-quy-trình-6-bước-triển-khai-chuẩn-clean-architecture)
-4. [Chi tiết code từng Module](#4-chi-tiết-code-từng-module)
+3. [Danh sách tất cả các File cần tạo & Đường dẫn (File Checklist)](#3-danh-sách-tất-cả-các-file-cần-tạo--đường-dẫn-file-checklist)
+4. [Quy trình 6 bước triển khai chuẩn Clean Architecture](#4-quy-trình-6-bước-triển-khai-chuẩn-clean-architecture)
+5. [Chi tiết code từng Module](#5-chi-tiết-code-từng-module)
    - [Module A: Quản lý Email Whitelist](#module-a-quản-lý-email-whitelist)
    - [Module B: User Profile & Avatar Upload (Bảo mật IDOR & File)](#module-b-user-profile--avatar-upload-bảo-mật-idor--file)
    - [Module C: Admin User Management (Quản trị người dùng)](#module-c-admin-user-management-quản-trị-người-dùng)
-5. [Đăng ký Dependency Injection & Static Files trong Program.cs](#5-đăng-ký-dependency-injection--static-files-trong-programcs)
-6. [Bảng kiểm tra An toàn Thông tin (Security Checklist)](#6-bảng-kiểm-tra-an-toàn-thông-tin-security-checklist)
+6. [Đăng ký Dependency Injection & Static Files trong Program.cs](#6-đăng-ký-dependency-injection--static-files-trong-programcs)
+7. [Bảng kiểm tra An toàn Thông tin (Security Checklist)](#7-bảng-kiểm-tra-an-toàn-thông-tin-security-checklist)
 
 ---
 
@@ -26,7 +27,7 @@ BE-2 phụ trách 3 mảng chức năng chính với các API Endpoint sau:
 | :--- | :--- | :--- | :--- | :--- |
 | **1** | Xem thông tin cá nhân | `GET` | `/api/users/me` | Người dùng đã đăng nhập |
 | **2** | Cập nhật thông tin cá nhân | `PUT` | `/api/users/me` | Người dùng đã đăng nhập |
-| **3** | Tải lên ảnh đại diện (Avatar) | `POST` | `/api/users/me/avatar` | Người dùng đã đăng nhập |
+| **3** | Tải lên ảnh đại diện (Avatar) | `POST` / `PATCH` | `/api/users/me/avatar` | Người dùng đã đăng nhập |
 | **4** | Admin xem danh sách người dùng | `GET` | `/api/admin/users` | Chỉ `Admin` (Có lọc & phân trang) |
 | **5** | Admin cập nhật Role/Status User | `PUT` | `/api/admin/users/{id}` | Chỉ `Admin` |
 | **6** | Admin xem danh sách Whitelist | `GET` | `/api/admin/whitelist` | Chỉ `Admin` |
@@ -51,7 +52,80 @@ Dự án chia làm 4 Project con (từ trong lõi ra ngoài):
 
 ---
 
-## 3. QUY TRÌNH 6 BƯỚC TRIỂN KHAI CHUẨN
+## 3. DANH SÁCH TẤT CẢ CÁC FILE CẦN TẠO & ĐƯỜNG DẪN (FILE CHECKLIST)
+
+Dưới đây là bảng tổng hợp toàn bộ các file bạn cần thao tác khi thực hiện vai trò **BE-2 (Leon)**. Bạn hãy đối chiếu từng file theo đúng đường dẫn này:
+
+### Bảng tra cứu nhanh theo tầng:
+
+| Tầng | Thao tác | Đường dẫn file chính xác | Mục đích / Chức năng |
+| :--- | :--- | :--- | :--- |
+| **Domain** | `[TẠO MỚI]` | `FirstAPIProject.Domain/Entities/EmailWhitelist.cs` | Thực thể CSDL cho bảng Whitelist (Id, Email, Reason, CreatedAt) |
+| **Domain** | `[CHỈNH SỬA]` | `FirstAPIProject.Domain/Entities/User.cs` | Bổ sung các cột: `FullName`, `PhoneNumber`, `AvatarUrl`, `Role`, `IsActive` |
+| **Infrastructure** | `[CHỈNH SỬA]` | `FirstAPIProject.Infrastructure/Persistence/AppDbContext.cs` | Khai báo `public DbSet<EmailWhitelist> EmailWhitelists` |
+| **Infrastructure** | `[TẠO MỚI]` | `FirstAPIProject.Infrastructure/Services/LocalFileStorageService.cs` | Dịch vụ lưu file ảnh, kiểm tra Magic Bytes, đổi tên bằng GUID |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Common/Interfaces/IFileStorageService.cs` | Interface cho dịch vụ lưu file ảnh |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/Whitelist/DTOs/WhitelistRequests.cs` | Các DTO hứng/trả dữ liệu Whitelist (`AddWhitelistRequest`, `WhitelistItemResponse`) |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/Whitelist/Validators/WhitelistValidators.cs` | FluentValidation kiểm tra email hợp lệ cho Whitelist |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/Whitelist/Interfaces/IEmailWhitelistService.cs` | Interface khai báo các hàm nghiệp vụ Whitelist |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/Whitelist/Services/EmailWhitelistService.cs` | Xử lý logic thêm, xóa, kiểm tra trùng lặp email Whitelist |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/DTOs/UserProfileDTOs.cs` | Các DTO cá nhân (`UserProfileResponse`, `UpdateProfileRequest`) |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/DTOs/AdminUserDTOs.cs` | Các DTO quản trị (`AdminUserFilterRequest`, `AdminUpdateUserRequest`) |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/Interfaces/IUserService.cs` | Interface xem/sửa hồ sơ cá nhân và đổi avatar |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/Services/UserService.cs` | Logic cập nhật thông tin người dùng và lưu avatar |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/Interfaces/IAdminUserService.cs` | Interface quản trị danh sách người dùng cho Admin |
+| **Application** | `[TẠO MỚI]` | `FirstAPIProject.Application/Modules/User/Services/AdminUserService.cs` | Logic tìm kiếm, lọc theo Role/Status, phân trang `Skip/Take` |
+| **Web API** | `[TẠO MỚI]` | `FirstAPIProject/Controllers/UserProfileController.cs` | Controller `/api/users/me` (Chống IDOR lấy ID từ JWT Claim) |
+| **Web API** | `[TẠO MỚI]` | `FirstAPIProject/Controllers/AdminWhitelistController.cs` | Controller `/api/admin/whitelist` (Phân quyền Admin) |
+| **Web API** | `[TẠO MỚI]` | `FirstAPIProject/Controllers/AdminUserController.cs` | Controller `/api/admin/users` (Phân quyền Admin) |
+| **Web API** | `[TẠO THƯ MỤC]`| `FirstAPIProject/wwwroot/uploads/avatars/` | Thư mục lưu trữ vật lý các file ảnh đại diện được upload |
+| **Web API** | `[CHỈNH SỬA]` | `FirstAPIProject/Program.cs` | Đăng ký `AddScoped` 4 dịch vụ và bật `app.UseStaticFiles()` |
+
+---
+
+### Sơ đồ cấu trúc cây thư mục:
+```text
+FirstAPIProject/
+├── FirstAPIProject.Domain/
+│   └── Entities/
+│       ├── EmailWhitelist.cs                         <-- [TẠO MỚI]
+│       └── User.cs                                   <-- [CHỈNH SỬA]
+│
+├── FirstAPIProject.Infrastructure/
+│   ├── Persistence/
+│   │   └── AppDbContext.cs                           <-- [CHỈNH SỬA]
+│   └── Services/
+│       └── LocalFileStorageService.cs                <-- [TẠO MỚI]
+│
+├── FirstAPIProject.Application/
+│   ├── Common/Interfaces/
+│   │   └── IFileStorageService.cs                    <-- [TẠO MỚI]
+│   └── Modules/
+│       ├── Whitelist/
+│       │   ├── DTOs/WhitelistRequests.cs             <-- [TẠO MỚI]
+│       │   ├── Validators/WhitelistValidators.cs     <-- [TẠO MỚI]
+│       │   ├── Interfaces/IEmailWhitelistService.cs  <-- [TẠO MỚI]
+│       │   └── Services/EmailWhitelistService.cs     <-- [TẠO MỚI]
+│       └── User/
+│           ├── DTOs/UserProfileDTOs.cs               <-- [TẠO MỚI]
+│           ├── DTOs/AdminUserDTOs.cs                 <-- [TẠO MỚI]
+│           ├── Interfaces/IUserService.cs            <-- [TẠO MỚI]
+│           ├── Services/UserService.cs               <-- [TẠO MỚI]
+│           ├── Interfaces/IAdminUserService.cs       <-- [TẠO MỚI]
+│           └── Services/AdminUserService.cs          <-- [TẠO MỚI]
+│
+└── FirstAPIProject/
+    ├── Controllers/
+    │   ├── UserProfileController.cs                  <-- [TẠO MỚI]
+    │   ├── AdminWhitelistController.cs               <-- [TẠO MỚI]
+    │   └── AdminUserController.cs                    <-- [TẠO MỚI]
+    ├── wwwroot/uploads/avatars/                      <-- [TẠO THƯ MỤC]
+    └── Program.cs                                    <-- [CHỈNH SỬA]
+```
+
+---
+
+## 4. QUY TRÌNH 6 BƯỚC TRIỂN KHAI CHUẨN
 
 Mỗi khi code một tính năng mới, bạn hãy đi theo đúng thứ tự 6 bước:
 1. **Bước 1 (Domain):** Tạo hoặc bổ sung `Entity` (Đại diện cho bảng/cột trong DB).
@@ -63,7 +137,7 @@ Mỗi khi code một tính năng mới, bạn hãy đi theo đúng thứ tự 6 
 
 ---
 
-## 4. CHI TIẾT CODE TỪNG MODULE
+## 5. CHI TIẾT CODE TỪNG MODULE
 
 ---
 
@@ -531,19 +605,20 @@ namespace FirstAPIProject.Controllers
         }
 
         [HttpPost("avatar")]
+        [Consumes("multipart/form-data")]
         [RequestSizeLimit(2 * 1024 * 1024)] // GIỚI HẠN TỐI ĐA 2MB (CHỐNG DOS)
-        public async Task<IActionResult> UploadAvatar(IFormFile file)
+        public async Task<IActionResult> UploadAvatar([FromForm] AvatarUploadRequest request)
         {
-            if (file == null || file.Length == 0)
+            if (request?.File == null || request.File.Length == 0)
                 return BadRequest(new { message = "Vui lòng chọn file ảnh." });
 
-            if (file.Length > 2 * 1024 * 1024)
+            if (request.File.Length > 2 * 1024 * 1024)
                 return BadRequest(new { message = "Dung lượng ảnh không được vượt quá 2MB." });
 
             try
             {
-                using var stream = file.OpenReadStream();
-                var avatarUrl = await _userService.UploadAvatarAsync(GetCurrentUserId(), stream, file.FileName);
+                using var stream = request.File.OpenReadStream();
+                var avatarUrl = await _userService.UploadAvatarAsync(GetCurrentUserId(), stream, request.File.FileName);
                 return Ok(new { avatarUrl });
             }
             catch (ArgumentException ex)
@@ -551,6 +626,12 @@ namespace FirstAPIProject.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+    }
+
+    // Class bao bọc file upload để Swagger sinh schema chuẩn, tránh lỗi Swagger 500
+    public class AvatarUploadRequest
+    {
+        public IFormFile File { get; set; } = null!;
     }
 }
 ```
@@ -720,7 +801,7 @@ namespace FirstAPIProject.Controllers
 
 ---
 
-## 5. ĐĂNG KÝ DEPENDENCY INJECTION & STATIC FILES TRONG PROGRAM.CS
+## 6. ĐĂNG KÝ DEPENDENCY INJECTION & STATIC FILES TRONG PROGRAM.CS
 
 Sau khi tạo xong tất cả các service và controller, mở file `FirstAPIProject/Program.cs` và thêm các dòng đăng ký sau:
 
@@ -737,7 +818,7 @@ app.UseStaticFiles();
 
 ---
 
-## 6. BẢNG KIỂM TRA AN TOÀN THÔNG TIN (SECURITY CHECKLIST)
+## 7. BẢNG KIỂM TRA AN TOÀN THÔNG TIN (SECURITY CHECKLIST)
 
 Khi nộp bài hoặc bảo vệ với thầy cô, bạn có thể tự tin trình bày các điểm sáng bảo mật sau đây do chính bạn thiết kế:
 
